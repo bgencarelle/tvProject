@@ -70,7 +70,7 @@
             display: block;
             opacity: 1;
         }
-        /* Black Overlay Styling */
+/* Black Overlay Styling */
         #blackOverlay {
             position: absolute;
             top: 0;
@@ -81,7 +81,9 @@
             display: none;
             opacity: 0;
             transition: opacity 0.01s linear;
+            z-index: 1000; /* Added z-index to ensure it's on top */
         }
+
         #blackOverlay.visible {
             display: block;
             opacity: 1;

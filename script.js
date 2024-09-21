@@ -10,28 +10,30 @@ var staticSound = document.getElementById('staticSound');
 
 var channelNumber = 2; // Starting channel number
 var minChannel = 2;
-var maxChannel = 57; // Total number of channels
+var maxChannel = 58; // Total number of channels
 var channelDisplayTimeout; // Timeout for hiding channel display
+var inputBufferTimeout; // Timeout reference for input buffer reset
+
+var inputBuffer = ''; // Input buffer for number entry simulation
+var isSwitching = false; // Flag to indicate if a channel switch is in progress
 
 // Start time reference
 var startTime = Date.now(); // Record the start time when the page loads
 
 // Channel sources mapping
-var channelSources = {};
-
-// Assume videoFilenames is loaded from an external .js file
-// var videoFilenames = ['video1.mp4', 'video2.mp4', 'video3.mp4']; // This line is now loaded externally
+//var channelSources = {};
 
 // Assign videos to channels, reusing videos as necessary
-for (var ch = minChannel; ch <= maxChannel; ch++) {
+/*for (var ch = minChannel; ch <= maxChannel; ch++) {
     var index = (ch - minChannel) % videoFilenames.length;
     channelSources[ch] = videoFilenames[index];
-}
+}*/
 
-// Load the initial channel
+// Load the initial channel when the window loads
 window.onload = function() {
     loadChannel(channelNumber);
-}
+    updateChannelDisplay(); // Initialize channel display
+};
 
 // Unmute videos after user interaction
 function unmuteVideos() {
@@ -54,8 +56,17 @@ function updateTimestamp() {
     timestampDisplay.textContent = minutes + ':' + seconds;
 }
 
-// Event listener for keyboard controls
+// Attach timeupdate event listener to update timestamp
+videoPlayer.addEventListener('timeupdate', updateTimestamp);
+
+// Event listener for keyboard controls, including number input simulation
 document.addEventListener('keydown', function(event) {
+    if (isSwitching) {
+        // Ignore inputs during channel switching
+        return;
+    }
+
+    // Handle ArrowUp and ArrowDown for channel navigation
     if (event.key === 'ArrowUp') {
         var newChannelNumber = channelNumber + 1;
         if (newChannelNumber > maxChannel) newChannelNumber = minChannel; // Loop back to minChannel
@@ -65,11 +76,67 @@ document.addEventListener('keydown', function(event) {
         if (newChannelNumber < minChannel) newChannelNumber = maxChannel; // Loop back to maxChannel
         switchChannel(newChannelNumber);
     }
+    // Handle number keys for channel selection
+    else if (event.key >= '0' && event.key <= '9') {
+        // Append the digit to the input buffer
+        inputBuffer += event.key;
+        // Update the channel display to show the entered digit(s)
+        updateChannelDisplay();
+
+        // Clear any existing input buffer timeout
+        clearTimeout(inputBufferTimeout);
+
+        // Set a new timeout to reset the input buffer after 2 seconds
+        inputBufferTimeout = setTimeout(function() {
+            // Reset the input buffer
+            inputBuffer = '';
+            // Update the channel display to show the current channel
+            updateChannelDisplay();
+        }, 2000); // 2000ms = 2 seconds
+
+        // If two digits have been entered, attempt to switch channel after 125ms delay
+        if (inputBuffer.length === 2) {
+            // Capture the desired channel and reset the input buffer
+            let desiredChannel = parseInt(inputBuffer, 10);
+            inputBuffer = '';
+
+            // Clear the input buffer timeout as we've already entered two digits
+            clearTimeout(inputBufferTimeout);
+
+            // Introduce a 125ms delay before switching channels
+            setTimeout(function() {
+                if (desiredChannel >= minChannel && desiredChannel <= maxChannel) {
+                    switchChannel(desiredChannel);
+                } else {
+                    // Provide feedback for invalid channel
+                    console.warn(`Invalid channel: ${desiredChannel}. Staying on channel ${channelNumber}.`);
+                    // Flash the channel display with 'Invalid' message
+                    channelCounter.textContent = 'Invalid';
+                    // Optional: You can add a CSS class for flashing effect
+                    setTimeout(function() {
+                        // Revert back to current channel display after flashing
+                        var formattedChannel = channelNumber.toString().padStart(2, '0');
+                        channelCounter.textContent = 'CH ' + formattedChannel;
+                        resetChannelDisplayTimeout();
+                    }, 500); // Display 'Invalid' for 500ms
+                }
+            }, 125);
+        }
+    }
+    // Ignore other keys
 });
 
-// Function to update channel display
+// Function to update channel display with leading zeros
 function updateChannelDisplay() {
-    channelCounter.textContent = 'CH ' + channelNumber;
+    if (inputBuffer.length === 0) {
+        // Format channelNumber with leading zero if it's a single digit
+        var formattedChannel = channelNumber.toString().padStart(2, '0');
+        channelCounter.textContent = 'CH ' + formattedChannel;
+    } else {
+        // Format inputBuffer with leading zero if it's a single digit
+        var formattedInput = inputBuffer.padStart(2, '0');
+        channelCounter.textContent = 'CH ' + formattedInput;
+    }
     channelCounter.style.opacity = 1; // Show the channel counter
     resetChannelDisplayTimeout(); // Reset the timer to hide the channel counter
 }
@@ -142,6 +209,13 @@ function loadChannel(channelNum) {
 
 // Function to switch channels with fade effect, static sound, and black screens
 function switchChannel(newChannelNumber) {
+    if (isSwitching) {
+        // If a switch is already in progress, ignore new switch requests
+        return;
+    }
+
+    isSwitching = true; // Set the flag to indicate switching has started
+
     channelNumber = newChannelNumber;
     updateChannelDisplay();
 
@@ -169,6 +243,11 @@ function switchChannel(newChannelNumber) {
 
                 // Load the new channel
                 loadChannel(channelNumber);
+
+                // Reset the switching flag after 500ms delay to allow new inputs
+                setTimeout(function() {
+                    isSwitching = false; // Allow new inputs after switch completion
+                }, 500); // 500ms delay before accepting new inputs
 
                 // Update timestamp display will be called after the video starts playing
             }, 10); // 10ms delay for black screen after static
