@@ -10,24 +10,21 @@ var staticSound = document.getElementById('staticSound');
 
 var channelNumber = 2; // Starting channel number
 var minChannel = 2;
-var maxChannel = 58; // Total number of channels
+var maxChannel = 57; // Updated to match the total number of channels
 var channelDisplayTimeout; // Timeout for hiding channel display
 var inputBufferTimeout; // Timeout reference for input buffer reset
 
 var inputBuffer = ''; // Input buffer for number entry simulation
 var isSwitching = false; // Flag to indicate if a channel switch is in progress
 
+// Variable to hold the camera stream
+var cameraStream = null; // Holds the MediaStream from the camera
+
 // Start time reference
 var startTime = Date.now(); // Record the start time when the page loads
 
-// Channel sources mapping
-//var channelSources = {};
-
-// Assign videos to channels, reusing videos as necessary
-/*for (var ch = minChannel; ch <= maxChannel; ch++) {
-    var index = (ch - minChannel) % videoFilenames.length;
-    channelSources[ch] = videoFilenames[index];
-}*/
+// Channel sources mapping is now defined in video_filenames.js
+// Ensure that video_filenames.js is loaded before script.js in index.html
 
 // Load the initial channel when the window loads
 window.onload = function() {
@@ -181,27 +178,54 @@ function hideStaticOverlay() {
 function loadChannel(channelNum) {
     var source = channelSources[channelNum];
     if (source) {
-        videoPlayer.src = source;
-        videoPlayer.load();
+        if (source === 'ccd') {
+            // Handle 'ccd' channel by accessing the camera
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                    .then(function(stream) {
+                        cameraStream = stream;
+                        videoPlayer.srcObject = stream;
+                        videoPlayer.play();
+                    })
+                    .catch(function(err) {
+                        console.error('Error accessing camera:', err);
+                        // Optionally, display an error message to the user
+                    });
+            } else {
+                console.error('getUserMedia not supported in this browser.');
+                // Optionally, display an error message to the user
+            }
+        } else {
+            // Handle regular video channels
+            // If a camera stream is active, stop it before loading a new video
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+                videoPlayer.srcObject = null;
+            }
 
-        // Remove existing timeupdate listener to prevent multiple bindings
-        videoPlayer.removeEventListener('timeupdate', updateTimestamp);
+            videoPlayer.src = source;
+            videoPlayer.load();
 
-        // Attach timeupdate event listener to update timestamp
-        videoPlayer.addEventListener('timeupdate', updateTimestamp);
+            // Remove existing timeupdate listener to prevent multiple bindings
+            videoPlayer.removeEventListener('timeupdate', updateTimestamp);
 
-        // Wait for metadata to load to get video duration
-        videoPlayer.addEventListener('loadedmetadata', function() {
-            var videoDuration = videoPlayer.duration;
+            // Attach timeupdate event listener to update timestamp
+            videoPlayer.addEventListener('timeupdate', updateTimestamp);
 
-            // Calculate elapsed time in seconds
-            var elapsedTime = (Date.now() - startTime) / 1000;
+            // Wait for metadata to load to get video duration
+            videoPlayer.addEventListener('loadedmetadata', function() {
+                var videoDuration = videoPlayer.duration;
 
-            // Set currentTime based on elapsed time modulo video duration
-            videoPlayer.currentTime = elapsedTime % videoDuration;
+                // Calculate elapsed time in seconds
+                var elapsedTime = (Date.now() - startTime) / 1000;
 
-            videoPlayer.play();
-        }, { once: true });
+                // Set currentTime based on elapsed time modulo video duration
+                videoPlayer.currentTime = elapsedTime % videoDuration;
+
+                videoPlayer.play();
+            }, { once: true });
+        }
     } else {
         console.error('No video source found for channel', channelNum);
     }
@@ -227,7 +251,7 @@ function switchChannel(newChannelNumber) {
         hideBlackOverlay();
         showStaticOverlay();
 
-        // Pause the current video
+        // Pause the current video or camera stream
         videoPlayer.pause();
 
         // After 500ms (static duration), hide static overlay and stop static sound
@@ -268,3 +292,10 @@ document.addEventListener('dblclick', function() {
 // Initialize channel display
 updateChannelDisplay();
 hideChannelDisplay(); // Hide the channel display initially
+
+// Cleanup camera stream on page unload
+window.addEventListener('beforeunload', function() {
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+    }
+});
