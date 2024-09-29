@@ -85,13 +85,13 @@ def generate_js_video_list(folder_path, output_file='video_filenames.js'):
             channel_sources[ch] = 'ccd'
         else:
             # Assign video files cyclically with relative paths using pathlib
-            relative_path = Path('videosforloop') / video_files[video_index % len(video_files)]
+            relative_path = Path('video') / video_files[video_index % len(video_files)]
             channel_sources[ch] = relative_path.as_posix()  # Ensure POSIX paths for JS
             video_index += 1
 
     # Format the videoFilenames array with relative paths
     js_video_filenames = "var videoFilenames = [" + ', '.join(
-        f"'{(Path('videosforloop') / file).as_posix()}'" for file in video_files
+        f"'{(Path('video') / file).as_posix()}'" for file in video_files
     ) + "];\n"
 
     # Format the channelSources mapping
@@ -114,7 +114,7 @@ def generate_js_video_list(folder_path, output_file='video_filenames.js'):
 
 if __name__ == '__main__':
     # Define the video folder path relative to the script's location
-    VIDEO_FOLDER = Path.cwd() / 'videosforloop'
+    VIDEO_FOLDER = Path.cwd() / 'video'
 
     # Define the output JavaScript file name
     OUTPUT_JS_FILE = 'video_filenames.js'
